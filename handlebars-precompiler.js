@@ -4,7 +4,8 @@
 var fs = require('fs'),
     handlebars = require('handlebars'),
     basename = require('path').basename,
-    uglify = require('uglify-js');
+    uglify = require('uglify-js'),
+    vm = require('vm');
 
 exports.do = function(opts) {
 
@@ -44,46 +45,78 @@ exports.do = function(opts) {
   }
 
   var output = [];
-  if (!opts.simple) {
-    output.push('(function() {\n  var template = Handlebars.template, templates = Handlebars.templates = Handlebars.templates || {};\n');
-  }
+  
   function processTemplate(template, root) {
     var path = template,
         stat = fs.statSync(path);
 
     // make the filename regex user-overridable
     var fileRegex = /\.handlebars$/;
-    if(opts.fileRegex) fileRegex = opts.fileRegex;
     
-    if (stat.isDirectory()) {
+    if (stat.isDirectory()) { // if its dir, loop through file in dir
       fs.readdirSync(template).map(function(file) {
         var path = template + '/' + file;
-
-        if (fileRegex.test(path) || fs.statSync(path).isDirectory()) {
+    if (fileRegex.test(path) ) {
           processTemplate(path, root || template);
         }
       });
-    } else {
+    } else { // real shit
       var data = fs.readFileSync(path, 'utf8');
+      
+       //dummy jQuery
+	var jQuery = function() { return jQuery; };
+	jQuery.ready = function() { return jQuery; };
+	jQuery.inArray = function() { return jQuery; };
+	jQuery.jquery = "1.7.2";
 
-      var options = {
-        knownHelpers: known,
-        knownHelpersOnly: opts.o
-      };
+	//dummy DOM element
+	var element = {
+	    firstChild: function () { return element; },
+	    innerHTML: function () { return element; }
+	};
 
-      // Clean the template name
-      if (!root) {
-        template = basename(template);
-      } else if (template.indexOf(root) === 0) {
-        template = template.substring(root.length+1);
-      }
-      template = template.replace(fileRegex, '');
+	var sandbox = {
+	    // DOM
+	    document: {
+	    createRange: false,
+	    createElement: function() { return element; }
+	    },
 
-      if (opts.simple) {
-        output.push(handlebars.precompile(data, options) + '\n');
-      } else {
-        output.push('templates[\'' + template + '\'] = template(' + handlebars.precompile(data, options) + ');\n');
-      }
+	    // Console
+	    console: console,
+
+	    // jQuery
+	    jQuery: jQuery,
+	    $: jQuery,
+
+	    // handlebars template to compile
+	    template: fs.readFileSync(path, 'utf8'),
+
+	    // compiled handlebars template
+	    templatejs: null
+	};
+	
+	// window
+	sandbox.window = sandbox;
+	
+	// create a context for the vm using the sandbox data
+	var context = vm.createContext(sandbox);
+	
+	// load Ember into the sandbox
+	vm.runInContext(opts.emberjs, context, 'ember.js');
+	
+	//compile the handlebars template inside the vm context
+	vm.runInContext('templatejs = Ember.Handlebars.precompile(template).toString();', context);
+
+	// Clean the template name
+	if (!root) {
+	    template = basename(template);
+	} else if (template.indexOf(root) === 0) {
+	    template = template.substring(root.length+1);
+	}
+	template = template.replace(fileRegex, '');
+	
+	output.push('Ember.TEMPLATES["' + template + '"] = Handlebars.template(' + context.templatejs + ');');
     }
   }
 
@@ -91,10 +124,6 @@ exports.do = function(opts) {
     processTemplate(template, opts.root);
   });
 
-  // Output the content
-  if (!opts.simple) {
-    output.push('})();');
-  }
   output = output.join('');
 
   if (opts.min) {
@@ -111,14 +140,12 @@ exports.do = function(opts) {
   }
 }
 
-exports.watchDir = function(dir, outfile, extensions) {
+exports.watchDir = function(dir, outfile, ember_path) {
   var fs = require('fs')
-    , file = require('file');
+    , file = require('file')
+    , emberjs = fs.readFileSync(ember_path, 'utf8');;
 
   var regex = /\.handlebars$/;
-  if(extensions) {
-    regex = new RegExp('\.' + extensions.join('$|\.') + '$');
-  }
 
   var compileOnChange = function(event, filename) {
     console.log('[' + event + '] detected in ' + (filename ? filename : '[filename not supported]'));
@@ -126,7 +153,7 @@ exports.watchDir = function(dir, outfile, extensions) {
     exports.do({
       templates: [dir],
       output: outfile,
-      fileRegex: regex,
+      emberjs: emberjs,
       min: true
     });
   }
