@@ -1,6 +1,12 @@
-# Death to Redundant View Templates!
+# Hurray! I dont know what im celebrating from
 
-Get the package: ```npm install handlebars-precompiler```
+This fork basically provide precompilation of handlebars templates for Ember.js application, 
+basically the single process flow that took me many hours to be satisfied with.
+
+hmm.. im new to the npm modules and stuff.
+so, to add this into ur project, 
+u can install it manually. 
+aka put the file inside the node_modules dir
 
 This is how you might use it in an Express project:
 
@@ -9,18 +15,26 @@ app.configure('development', function(){
   hbsPrecompiler = require('handlebars-precompiler');
   hbsPrecompiler.watchDir(
     __dirname + "/views",
-    __dirname + "/public/javascripts/templates.js",
-    ['handlebars', 'hbs']
+    __dirname + "/public/javascripts/templates.js",     // the single minified precompiled js - put above ur main ember js
+    __dirname + "/public/javascripts/vendor/ember.js",  // ur ember.js file
   );
 });
 ```
 
-In this example, we watch for changes to ```*.handlebars``` and ```*.hbs``` files in our views directory.
+In this example, we watch for changes to ```*.handlebars``` files in our views directory.
 When changes are made, precompilation is run on all Handlebars templates and exported to a single minified
 Javascript file.
 
-On the browser side, you will need to deploy the Handlebars runtime-only release.
-You could use the full release which includes a compiler, but your site will be faster if you don't.
+Client-side versions of the templates will be named and stored in the ```Ember.TEMPLATES``` object according to their file name,
+e.g. ```Ember.TEMPLATES['user_info']```
+more e.g. 
+var view = Em.View.create({
+  name: "Bob",
+	template: Em.TEMPLATES["user_info"]
+});
 
-Client-side versions of the templates will be named and stored in the ```Handlebars``` object according to their file paths,
-e.g. ```Handlebars.templates['users/show']```
+many thanks to:
+https://gist.github.com/2013669
+and 
+https://github.com/jwietelmann/node-handlebars-precompiler
+for code examples
